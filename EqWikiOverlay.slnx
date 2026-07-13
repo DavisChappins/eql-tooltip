@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="EqWikiOverlay.Tests/EqWikiOverlay.Tests.csproj" />
+  <Project Path="EqWikiOverlay/EqWikiOverlay.csproj" />
+</Solution>

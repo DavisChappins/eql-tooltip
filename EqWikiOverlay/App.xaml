@@ -1,0 +1,8 @@
+<Application x:Class="EqWikiOverlay.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:EqWikiOverlay.Ui">
+    <Application.Resources>
+        <ui:BoolToVisibilityConverter x:Key="BoolToVis" />
+    </Application.Resources>
+</Application>
