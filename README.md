@@ -22,7 +22,8 @@ only reads the screen (OCR) when you hold the hotkey, and looks the name up on t
 
 ## Use it
 
-1. Hover an item so EQ's own tooltip is showing.
+1. Point at an item so its name is on screen — either **hover** it in your inventory (EQ shows a
+   tooltip) or **open its Description window** (e.g. from a link someone posted).
 2. **Hold the hotkey** (default **Shift+A**). The wiki panel appears pinned to the left of your
    cursor.
 3. Release the hotkey to hide it (or click the **✕**).
@@ -51,8 +52,7 @@ the OCR capture box here if names get cut off or misread:
 | Field | Meaning |
 |-------|---------|
 | `Hotkey` | Hold-to-show combo, e.g. `Shift+A`, `Ctrl+Shift+I`. |
-| `CaptureWidth` / `CaptureHeight` | Size of the screen region OCR'd near the cursor. Widen if long names get cut off. |
-| `CaptureOffsetX` / `CaptureOffsetY` | Where the capture box sits relative to the cursor. |
+| `CaptureLeft` / `CaptureRight` / `CaptureUp` / `CaptureDown` | How far the OCR box extends from the cursor in each direction. The box covers both the inventory tooltip (below-right) and an item Description window (name in the title bar above). Widen a side if a name is missed. |
 | `DisplayMode` | `Overlay`, `Popup`, or `SidePanel`. |
 | `WikiApiUrl` | MediaWiki API base. Default `https://eqlwiki.com/api.php`. |
 

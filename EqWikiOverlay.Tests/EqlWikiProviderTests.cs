@@ -89,4 +89,21 @@ public class EqlWikiProviderTests
         double bad = EqlWikiProvider.NormalizedEditDistance(ocr, "Flowing Black Silk Sash");
         Assert.True(good < bad, $"{candidate} ({good}) should beat unrelated ({bad})");
     }
+
+    [Fact]
+    public void OcrVariants_ExpandsRnConfusion()
+    {
+        // The "rn"->"m" OCR error: "Moming" should yield a "Morning" variant.
+        var variants = EqlWikiProvider.OcrVariants("Enchanted Fine Steel Moming Star").ToList();
+        Assert.Contains("Enchanted Fine Steel Morning Star", variants);
+        Assert.Equal("Enchanted Fine Steel Moming Star", variants[0]); // original tried first
+    }
+
+    [Fact]
+    public void OcrVariants_FixesQAndZero()
+    {
+        var variants = EqlWikiProvider.OcrVariants("Mominq St0ne").ToList();
+        Assert.Contains(variants, v => v.Contains("Stone"));      // 0 -> o
+        Assert.Contains(variants, v => v.Contains("Morning"));    // q->g then m->rn
+    }
 }
