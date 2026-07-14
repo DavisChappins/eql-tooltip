@@ -57,6 +57,7 @@ public sealed class TrayIcon : IDisposable
         }
 
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Show OCR debug window", null, (_, _) => _app.ShowDebugWindow()));
         menu.Items.Add(new ToolStripMenuItem("Clear wiki cache", null, (_, _) => _app.ClearCache()));
         menu.Items.Add(new ToolStripMenuItem("Open settings folder", null,
             (_, _) => OpenFolder(Settings.DefaultDirectory)));

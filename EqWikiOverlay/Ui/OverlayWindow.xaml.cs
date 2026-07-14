@@ -38,7 +38,8 @@ public partial class OverlayWindow : Window, IInfoWindow
         ex |= Native.WS_EX_LAYERED | Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW;
         Native.SetWindowLong(hwnd, Native.GWL_EXSTYLE, ex);
 
-        Native.SetWindowDisplayAffinity(hwnd, Native.WDA_EXCLUDEFROMCAPTURE);
+        // The panel is capturable (screenshots/recorders see it). It sits to the LEFT of the cursor
+        // while our OCR reads the region to the RIGHT, so it never appears in our own captures.
     }
 
     /// <param name="screenPoint">Cursor position in physical screen pixels.</param>

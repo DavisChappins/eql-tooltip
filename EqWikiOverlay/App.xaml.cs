@@ -24,6 +24,7 @@ public partial class App : WpfApp
     private LookupCoordinator? _coordinator;
     private ItemPanelViewModel _vm = null!;
     private TrayIcon? _tray;
+    private Ui.DebugWindow? _debugWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -51,11 +52,18 @@ public partial class App : WpfApp
 
         _ocr = new OcrService();
         _reader = new TooltipReader(_settings, _ocr);
+        _reader.DebugSink = (bmp, raw, picked, pass) =>
+        {
+            // Clone the bitmap for the UI thread (the reader disposes the original).
+            var copy = new System.Drawing.Bitmap(bmp);
+            RunOnUi(() => _debugWindow?.Update(copy, raw, picked, pass));
+        };
 
         _coordinator = new LookupCoordinator(
             _settings, _reader, _ocr.Available, _cache, _vm,
             windowFactory: CreateWindow,
             marshalToUi: RunOnUi);
+        _coordinator.ResolvedSink = info => RunOnUi(() => _debugWindow?.SetResolved(info));
 
         StartHotkey();
 
@@ -100,6 +108,21 @@ public partial class App : WpfApp
 
     /// <summary>Clears the wiki cache (tray menu) so lookups re-fetch fresh.</summary>
     public void ClearCache() => _cache?.Clear();
+
+    /// <summary>Opens (or focuses) the live OCR debug window.</summary>
+    public void ShowDebugWindow()
+    {
+        RunOnUi(() =>
+        {
+            if (_debugWindow is null)
+            {
+                _debugWindow = new Ui.DebugWindow();
+                _debugWindow.Closed += (_, _) => _debugWindow = null;
+            }
+            _debugWindow.Show();
+            _debugWindow.Activate();
+        });
+    }
 
     // Hold-to-show: panel appears while the hotkey is held, hides on release.
     private void StartHotkey()

@@ -25,6 +25,9 @@ public sealed class LookupCoordinator
 
     public bool OcrAvailable { get; }
 
+    /// <summary>Optional: reports the resolved wiki outcome (for the debug window).</summary>
+    public Action<string>? ResolvedSink { get; set; }
+
     public LookupCoordinator(
         Settings settings,
         TooltipReader reader,
@@ -65,23 +68,33 @@ public sealed class LookupCoordinator
                 return;
             }
 
-            _onUi(() =>
-            {
-                _vm.ShowLoading("Reading tooltip…");
-                ShowAt(anchor);
-            });
-
+            // Capture & OCR FIRST, before showing our panel — otherwise the panel (which is
+            // capturable and sits just left of the cursor) could be read by our own OCR.
             using var read = await _reader.ReadAtAsync(cursor);
 
             if (string.IsNullOrWhiteSpace(read.ItemName))
             {
-                _onUi(() => _vm.ShowMessage("No text found",
-                    "Couldn't read an item name under the cursor. Hover the item so EQ's tooltip is " +
-                    "visible, then press the hotkey. (Adjust CaptureWidth/Height in settings if needed.)"));
+                _onUi(() =>
+                {
+                    _vm.ShowMessage("No text found",
+                        "Couldn't read an item name under the cursor. Hover the item (or open its " +
+                        "Description window) so the name is visible, then press the hotkey.");
+                    ShowAt(anchor);
+                });
                 return;
             }
 
+            _onUi(() =>
+            {
+                _vm.ShowLoading(read.ItemName);
+                ShowAt(anchor);
+            });
+
             var result = await _cache.GetAsync(read.ItemName);
+
+            ResolvedSink?.Invoke(result.Found
+                ? $"OCR \"{read.ItemName}\"  →  wiki \"{result.PageTitle}\"  ✓"
+                : $"OCR \"{read.ItemName}\"  →  no wiki page found");
 
             _onUi(() =>
             {

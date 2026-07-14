@@ -51,7 +51,16 @@ public sealed class EqlWikiProvider : IWikiProvider
         if (string.IsNullOrWhiteSpace(itemName))
             return WikiItem.NotFound(Source, itemName);
 
-        var hit = await SearchAsync(itemName, ct).ConfigureAwait(false);
+        // Try the raw OCR text first, then OCR-error-corrected variants (e.g. "Moming"->"Morning").
+        // MediaWiki search returns nothing for badly garbled words, so correcting BEFORE searching
+        // is what recovers them.
+        (string Title, int PageId)? hit = null;
+        foreach (var variant in OcrVariants(itemName))
+        {
+            hit = await SearchAsync(variant, ct).ConfigureAwait(false);
+            if (hit is not null)
+                break;
+        }
         if (hit is null)
             return WikiItem.NotFound(Source, itemName);
 
@@ -67,6 +76,45 @@ public sealed class EqlWikiProvider : IWikiProvider
             PageUrl = BuildPageUrl(hit.Value.Title),
             Sections = sections
         };
+    }
+
+    /// <summary>
+    /// Yields the query plus OCR-error-corrected variants to try in order. EQ's small font makes
+    /// the OCR engine confuse certain shapes; correcting them lets the wiki search find the page.
+    /// </summary>
+    internal static IEnumerable<string> OcrVariants(string q)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        string Norm(string s) => Regex.Replace(s, @"\s+", " ").Trim();
+
+        IEnumerable<string> Candidates()
+        {
+            yield return q;
+
+            // Fix simple 1:1 confusions.
+            var s = q.Replace('q', 'g').Replace('0', 'o');
+            yield return s;
+
+            // The most common EQ OCR error: "rn" is read as "m" ("Morning" -> "Moming").
+            // Expand each 'm' to 'rn' one at a time (covers a single-word slip) and all at once.
+            yield return s.Replace("m", "rn");
+            yield return q.Replace("m", "rn");
+
+            int idx = 0;
+            while ((idx = s.IndexOf('m', idx)) >= 0)
+            {
+                yield return s[..idx] + "rn" + s[(idx + 1)..];
+                idx++;
+            }
+        }
+
+        foreach (var c in Candidates())
+        {
+            var n = Norm(c);
+            if (n.Length > 0 && seen.Add(n))
+                yield return n;
+        }
     }
 
     private async Task<(string Title, int PageId)?> SearchAsync(string query, CancellationToken ct)
