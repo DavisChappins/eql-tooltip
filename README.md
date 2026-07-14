@@ -39,7 +39,7 @@ open the full wiki page. In-game stats are intentionally omitted since EQ alread
 | **Look up item under cursor** | Same as holding the hotkey. |
 | **Set hotkey…** | Press any combo (Shift/Ctrl/Alt + a key) to rebind. Applies instantly. |
 | **Test lookup by name…** | Type an item name to look it up — no game needed. |
-| **Display mode** | Overlay (default), Popup, or SidePanel. |
+| **Show OCR debug window** | Live view of the last capture, OCR text, and what was picked. |
 | **Clear wiki cache** | Wipe cached results and re-fetch. |
 | **Open settings folder** | Opens `%AppData%\EqWikiOverlay`. |
 | **Exit** | Quit. |
@@ -52,8 +52,8 @@ the OCR capture box here if names get cut off or misread:
 | Field | Meaning |
 |-------|---------|
 | `Hotkey` | Hold-to-show combo, e.g. `Shift+A`, `Ctrl+Shift+I`. |
-| `CaptureLeft` / `CaptureRight` / `CaptureUp` / `CaptureDown` | How far the OCR box extends from the cursor in each direction. The box covers both the inventory tooltip (below-right) and an item Description window (name in the title bar above). Widen a side if a name is missed. |
-| `DisplayMode` | `Overlay`, `Popup`, or `SidePanel`. |
+| `TooltipWidth` / `TooltipHeight` / `TooltipOffsetX` / `TooltipOffsetY` | The tight capture box for the inventory tooltip (below-right of the cursor). |
+| `CaptureLeft` / `CaptureRight` / `CaptureUp` / `CaptureDown` | The wide capture box used for an item Description window (name in the title above the cursor). Widen a side if a name is missed. |
 | `WikiApiUrl` | MediaWiki API base. Default `https://eqlwiki.com/api.php`. |
 
 ## How it works

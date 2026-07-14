@@ -4,13 +4,6 @@ using System.Text.Json.Serialization;
 
 namespace EqWikiOverlay.Core;
 
-public enum DisplayMode
-{
-    Popup,
-    Overlay,
-    SidePanel
-}
-
 /// <summary>
 /// User-configurable settings, persisted as JSON under %AppData%\EqWikiOverlay\settings.json.
 /// </summary>
@@ -38,9 +31,6 @@ public sealed class Settings
     public int CaptureRight { get; set; } = 560;
     public int CaptureUp { get; set; } = 620;
     public int CaptureDown { get; set; } = 160;
-
-    /// <summary>Which window style shows the wiki info.</summary>
-    public DisplayMode DisplayMode { get; set; } = DisplayMode.Overlay;
 
     /// <summary>MediaWiki API base URL for the primary wiki source.</summary>
     public string WikiApiUrl { get; set; } = "https://eqlwiki.com/api.php";

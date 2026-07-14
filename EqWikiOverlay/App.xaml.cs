@@ -79,25 +79,12 @@ public partial class App : WpfApp
         _tray.Show();
     }
 
-    private IInfoWindow CreateWindow() => _settings.DisplayMode switch
-    {
-        DisplayMode.Overlay => new OverlayWindow(_vm),
-        DisplayMode.SidePanel => new SidePanelWindow(_vm),
-        _ => new PopupWindow(_vm),
-    };
+    private IInfoWindow CreateWindow() => new OverlayWindow(_vm);
 
     private void RunOnUi(Action action)
     {
         if (Dispatcher.CheckAccess()) action();
         else Dispatcher.BeginInvoke(action, DispatcherPriority.Normal);
-    }
-
-    /// <summary>Called by the tray menu when the display mode changes.</summary>
-    public void ChangeDisplayMode(DisplayMode mode)
-    {
-        _settings.DisplayMode = mode;
-        _settings.Save();
-        _coordinator?.ResetWindow();
     }
 
     /// <summary>Fires a wiki lookup with a typed item name (tray "Test lookup..."). No OCR/EQ.</summary>

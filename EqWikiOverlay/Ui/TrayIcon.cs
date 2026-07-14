@@ -43,20 +43,6 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(new ToolStripMenuItem("Test lookup by name…", null, (_, _) => PromptTestLookup()));
         menu.Items.Add(new ToolStripSeparator());
 
-        // Display mode radio group.
-        menu.Items.Add(new ToolStripMenuItem("Display mode") { Enabled = false });
-        foreach (DisplayMode mode in Enum.GetValues<DisplayMode>())
-        {
-            var item = new ToolStripMenuItem(mode.ToString())
-            {
-                Checked = _settings.DisplayMode == mode,
-                CheckOnClick = false
-            };
-            item.Click += (_, _) => _app.ChangeDisplayMode(mode);
-            menu.Items.Add(item);
-        }
-
-        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Show OCR debug window", null, (_, _) => _app.ShowDebugWindow()));
         menu.Items.Add(new ToolStripMenuItem("Clear wiki cache", null, (_, _) => _app.ClearCache()));
         menu.Items.Add(new ToolStripMenuItem("Open settings folder", null,

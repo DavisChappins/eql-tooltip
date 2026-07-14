@@ -150,13 +150,4 @@ public sealed class LookupCoordinator
         return _window;
     }
 
-    /// <summary>Recreates the display window for a new display mode.</summary>
-    public void ResetWindow()
-    {
-        _onUi(() =>
-        {
-            _window?.ClosePanel();
-            _window = null;
-        });
-    }
 }
