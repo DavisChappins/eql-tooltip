@@ -26,10 +26,33 @@ public partial class App : WpfApp
     private TrayIcon? _tray;
     private Ui.DebugWindow? _debugWindow;
 
+    public App()
+    {
+        // Catch failures on ANY thread (including before/around OnStartup) so a startup crash writes
+        // a log and shows a dialog instead of the process vanishing with no tray icon and no error.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => FatalError(e.ExceptionObject as Exception, "AppDomain");
+        DispatcherUnhandledException += (_, e) => { FatalError(e.Exception, "Dispatcher"); e.Handled = true; };
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
+        try
+        {
+            InitializeApp();
+        }
+        catch (Exception ex)
+        {
+            // Any throw during init (SQLite/OCR native load, etc.) lands here instead of silently
+            // killing the app before the tray icon is created.
+            FatalError(ex, "Startup");
+            Shutdown();
+        }
+    }
+
+    private void InitializeApp()
+    {
         _singleInstance = new Mutex(initiallyOwned: true, "EqWikiOverlay.SingleInstance", out bool isNew);
         if (!isNew)
         {
@@ -132,6 +155,37 @@ public partial class App : WpfApp
     public string CurrentHotkey => _settings.Hotkey;
 
     public void ExitApp() => Shutdown();
+
+    private static bool _reported;
+
+    /// <summary>
+    /// Records a fatal error to %AppData%\EqWikiOverlay\crash.log and shows it once, so a startup
+    /// failure is visible and diagnosable instead of the app disappearing with no trace.
+    /// </summary>
+    private static void FatalError(Exception? ex, string source)
+    {
+        try
+        {
+            var dir = Settings.DefaultDirectory;
+            Directory.CreateDirectory(dir);
+            var logPath = Path.Combine(dir, "crash.log");
+            File.AppendAllText(logPath, $"[{DateTimeOffset.Now:O}] ({source})\n{ex}\n\n");
+
+            if (!_reported)
+            {
+                _reported = true;
+                WinForms.MessageBox.Show(
+                    "EQ Wiki Overlay hit a fatal error and has to close.\n\n" +
+                    (ex?.Message ?? "Unknown error") + "\n\n" +
+                    "Details were written to:\n" + logPath,
+                    "EQ Wiki Overlay", WinForms.MessageBoxButtons.OK, WinForms.MessageBoxIcon.Error);
+            }
+        }
+        catch
+        {
+            // Last resort — if even logging/showing fails, there's nothing more we can do.
+        }
+    }
 
     protected override void OnExit(ExitEventArgs e)
     {

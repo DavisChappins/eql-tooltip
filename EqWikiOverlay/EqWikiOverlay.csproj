@@ -10,6 +10,32 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>EqWikiOverlay</RootNamespace>
     <AssemblyName>EqWikiOverlay</AssemblyName>
+    <!-- Ship only the English resources; drop other-language satellite assemblies. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!--
+    Release builds produce ONE self-contained, single-file, compressed exe with the .NET runtime
+    bundled inside, so it runs on a machine with no .NET installed (that was the win10-laptop bug).
+
+    These live here (not just in a README command) so a release can't accidentally ship a
+    framework-dependent exe or leave out SQLite's native e_sqlite3.dll. They're gated to Release so
+    `dotnet run` / `dotnet test` (Debug) stay fast and the test project can still reference this one.
+
+    - IncludeNativeLibrariesForSelfExtract: bundles native libs (e_sqlite3.dll, WPF/WinForms native
+      bits) INTO the exe and extracts them at launch — without it, single-file omits them and the
+      app throws at startup on a clean machine.
+    - EnableCompressionInSingleFile: compresses the bundled runtime, ~halving the exe (~180MB→~90MB).
+      WPF can't be trimmed, so compression is the only safe size lever.
+
+    Publish with:  dotnet publish EqWikiOverlay/EqWikiOverlay.csproj -c Release -o publish
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>

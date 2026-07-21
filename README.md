@@ -78,11 +78,13 @@ dotnet run --project EqWikiOverlay            # run locally
 Produce the self-contained single-file exe that ships in a Release:
 
 ```sh
-dotnet publish EqWikiOverlay/EqWikiOverlay.csproj -c Release -r win-x64 \
-  --self-contained true -p:PublishSingleFile=true -o publish
+dotnet publish EqWikiOverlay/EqWikiOverlay.csproj -c Release -o publish
 ```
 
-The exe lands at `publish/EqWikiOverlay.exe`.
+The self-contained, single-file, compressed settings are baked into the `.csproj` (gated to
+`Release`), so no extra `-r`/`--self-contained`/`-p:` flags are needed. The exe lands at
+`publish/EqWikiOverlay.exe` and is ~90 MB (it bundles the entire .NET + WPF runtime; WPF can't be
+trimmed, so compression is the main size lever).
 
 ## Project layout
 
