@@ -76,8 +76,10 @@ public sealed class OcrService
     }
 
     /// <summary>
-    /// Simple contrast stretch to sharpen antialiased tooltip text: pushes light text lighter and
-    /// dark background darker, which reduces OCR letter confusions (e.g. "ti" read as "b").
+    /// Converts to a max-channel grayscale, then contrast-stretches. EQ item titles are drawn in
+    /// GREEN, whose luminance is low enough that a per-channel stretch used to distort or drop the
+    /// first word ("Cloth Gloves" -> "Gloves"). Taking max(R,G,B) maps bright green text to the same
+    /// brightness as white body text, so OCR reads titles and stats uniformly.
     /// </summary>
     private static void BoostContrast(Bitmap bmp)
     {
@@ -89,16 +91,15 @@ public sealed class OcrService
             var buf = new byte[bytes];
             Marshal.Copy(data.Scan0, buf, 0, bytes);
 
-            // Per-channel: v' = clamp(((v/255 - 0.5) * gain + 0.5) * 255)
-            const double gain = 1.7;
+            const double gain = 1.5;
             for (int i = 0; i < bytes; i += 4) // BGRA
             {
-                for (int c = 0; c < 3; c++)
-                {
-                    double v = buf[i + c] / 255.0;
-                    v = (v - 0.5) * gain + 0.5;
-                    buf[i + c] = (byte)Math.Clamp(v * 255.0, 0, 255);
-                }
+                // Max channel: colored text (green titles) becomes as bright as white text.
+                int max = Math.Max(buf[i], Math.Max(buf[i + 1], buf[i + 2]));
+                double v = max / 255.0;
+                v = (v - 0.5) * gain + 0.5;
+                byte o = (byte)Math.Clamp(v * 255.0, 0, 255);
+                buf[i] = buf[i + 1] = buf[i + 2] = o; // write gray to B, G, R
             }
             Marshal.Copy(buf, 0, data.Scan0, bytes);
         }

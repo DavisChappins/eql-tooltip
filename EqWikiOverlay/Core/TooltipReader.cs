@@ -58,6 +58,10 @@ public sealed class TooltipReader
         if (!isDescription)
         {
             var tightName = PickItemName(tightLines, 0.02, 0.02, requireConfident: true);
+            // Only trust pass 1 if the capture actually looks like an item tooltip; otherwise fall
+            // through (a stray on-screen word shouldn't be treated as an item name).
+            if (!HasItemStructure(tightLines.Select(l => l.Text)))
+                tightName = null;
             DebugSink?.Invoke(tightBmp, tightRaw, tightName, "pass 1 (tight tooltip box)");
             if (!string.IsNullOrWhiteSpace(tightName))
             {
@@ -92,6 +96,11 @@ public sealed class TooltipReader
             name = PickItemName(lines, 0, 0, requireConfident: true, preferName: true);
             pass = "pass 2 (wide box, no description window)";
         }
+
+        // No tooltip structure anywhere -> we captured background/UI, not an item. Return no name so
+        // the user gets "hover the item" instead of a bogus lookup on a stray word.
+        if (name is not null && !HasItemStructure(lines.Select(l => l.Text)))
+            name = null;
 
         DebugSink?.Invoke(bmp, raw, name, pass);
         MaybeDump(bmp, raw, name);
@@ -141,6 +150,13 @@ public sealed class TooltipReader
         foreach (var c in cleaned)
             counts[c.Text] = counts.GetValueOrDefault(c.Text) + 1;
 
+        // The topmost name-shaped line — in a tight inventory tooltip the item name is always the
+        // first line, so this anchors the short-name rescue below.
+        double topFracY = cleaned.Where(c => LooksLikeName(c.Text))
+                                 .Select(c => c.FracY)
+                                 .DefaultIfEmpty(double.MaxValue)
+                                 .Min();
+
         string? best = null;
         double bestScore = double.NegativeInfinity;
 
@@ -152,7 +168,17 @@ public sealed class TooltipReader
             // "Primary"/"Face" — so that hovering directly on an icon falls through to the wide
             // box, which reads the real title above the icon.
             if (requireConfident && !IsConfidentName(c.Text))
-                continue;
+            {
+                // Rescue: a short name (e.g. "Cord", "Cap") isn't "confident" on its own, but in the
+                // tight box the topmost name-shaped line that isn't a slot/size word IS the item.
+                // Scoped to the proximity pass (!preferName) so the wide/description passes are
+                // unaffected.
+                bool topLineRescue = !preferName
+                                     && c.FracY <= topFracY + 0.02
+                                     && !IsSlotOrSizeWord(c.Text);
+                if (!topLineRescue)
+                    continue;
+            }
             // Pass 1 also requires the name to be in the TOP band (where a real inventory tooltip
             // puts the item name). Rejects stray mid-frame fragments when we're actually hovering
             // inside an open Description window, so we fall through to pass 2. (FracX is unreliable
@@ -213,7 +239,11 @@ public sealed class TooltipReader
         {
             var s = t.Trim();
             if (Regex.IsMatch(s, @"xaltation", RegexOptions.IgnoreCase)) exalt++;
-            if (Regex.IsMatch(s, @"(description|[JU]nmodified|amentation|can be upgraded|inspect or upgrade)",
+            // "odified" catches Modified/Unmodified even when OCR drops the leading letter
+            // ("lodified"); "be upgraded" catches the upgrade-window line ("This item [can] be
+            // upgraded."). These only appear in the Description/upgrade window, never a plain
+            // inventory tooltip (whose only upgrade-ish line is "…inspect or upgrade").
+            if (Regex.IsMatch(s, @"(description|[JU]nmodified|odified|amentation|be upgraded|merge|inspect or upgrade)",
                     RegexOptions.IgnoreCase)) other++;
         }
         return exalt >= 2 || (exalt >= 1 && other >= 1) || other >= 2;
@@ -236,8 +266,16 @@ public sealed class TooltipReader
 
         bool IsName(string s) => LooksLikeName(s) && IsConfidentName(s);
 
-        // Strongest signal: the item name sits on/after the "(Un)modified" dropdown line, which
-        // holds the full name. Prefer a confident name at or just after that line.
+        // Strongest signal: EQ's item panel lists the name directly above the trade-flags line
+        // ("No Trade" / "Lore" / "Class:"). The nearest name-shaped line above the first such anchor
+        // is the item — this beats surrounding game UI (a stance button, a zone banner) that the
+        // wide capture box also grabbed, which used to win the longest-line fallback.
+        var byFlags = NameAboveFlags(cleaned, IsName);
+        if (byFlags is not null)
+            return byFlags;
+
+        // Next: the item name sits on/after the "(Un)modified" dropdown line, which holds the full
+        // name. Prefer a confident name at or just after that line.
         for (int i = 0; i < cleaned.Count; i++)
         {
             if (Regex.IsMatch(cleaned[i], @"^[JU]?n?modified\b", RegexOptions.IgnoreCase))
@@ -258,8 +296,91 @@ public sealed class TooltipReader
         if (repeated is not null)
             return repeated;
 
+        // Near-duplicate repeat: the two copies of the title (title bar + dropdown) may be garbled
+        // differently by OCR ("Clot) Shawt" vs "Clot) Shawl"). A name-shaped line with a near-twin
+        // is the item title. Surrounding game UI (a stance button, a zone banner) never repeats, so
+        // this beats the longest-line fallback that used to grab that UI text.
+        for (int i = 0; i < cleaned.Count; i++)
+        {
+            if (!IsName(cleaned[i])) continue;
+            for (int j = i + 1; j < cleaned.Count; j++)
+            {
+                if (IsName(cleaned[j]) && NearDuplicate(cleaned[i], cleaned[j]))
+                    return cleaned[i]; // topmost of the pair
+            }
+        }
+
         // Fallback: the LONGEST confident name (item names are long; stats/labels are short).
         return cleaned.Where(IsName).OrderByDescending(s => s.Length).FirstOrDefault();
+    }
+
+    // Any real item tooltip or Description window carries at least one of these structural markers
+    // below the name (trade flags, a stat row, the inspect hint, the upgrade UI). Their total
+    // absence means we captured background or non-item UI, not an item.
+    private static readonly Regex ItemStructure = new(
+        @"(no\s*trade|no\s*drop|\blore\b|class\s*[:.]|\bslot\b|\bweight\b|\bsize\b|\bvalue\b|\bac\b|hold rmb|be upgraded|\bmerge\b|modified|xaltation)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>True if the OCR'd lines carry any item-tooltip structure (flags/stats/hint/upgrade UI).</summary>
+    internal static bool HasItemStructure(IEnumerable<string> lines) =>
+        lines.Any(l => ItemStructure.IsMatch(l));
+
+    // Lines that begin the item's attribute block, printed directly below the item name in EQ's
+    // tooltip and Description window. The name is the line just above the first of these.
+    private static readonly Regex FlagsAnchor = new(
+        @"^(no\s*trade|no\s*drop|no\s*rent|lore\b|magic item|attunable|quest item|placeable|prestige|temporary|class\s*[:.])",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns the nearest name-shaped line just above the first trade-flags anchor, or null if there
+    /// is none. This is the item name in EQ's fixed panel layout (name → flags → stats).
+    /// </summary>
+    private static string? NameAboveFlags(IReadOnlyList<string> cleaned, Func<string, bool> isName)
+    {
+        int anchor = -1;
+        for (int i = 0; i < cleaned.Count; i++)
+        {
+            if (FlagsAnchor.IsMatch(cleaned[i])) { anchor = i; break; }
+        }
+        if (anchor <= 0)
+            return null;
+
+        // The name is normally the line immediately above; scan up a couple more in case OCR slipped
+        // a stray token in between, but don't reach far enough to grab surrounding UI.
+        for (int i = anchor - 1; i >= 0 && i >= anchor - 3; i--)
+        {
+            if (isName(cleaned[i]))
+                return cleaned[i];
+        }
+        return null;
+    }
+
+    /// <summary>True if two name-shaped lines differ only slightly (OCR garble of the same title).</summary>
+    private static bool NearDuplicate(string a, string b)
+    {
+        if (a.Length < 6 || b.Length < 6) return false;
+        int max = Math.Max(a.Length, b.Length);
+        return (double)Levenshtein(a, b) / max <= 0.25;
+    }
+
+    private static int Levenshtein(string a, string b)
+    {
+        a = a.ToLowerInvariant();
+        b = b.ToLowerInvariant();
+        var prev = new int[b.Length + 1];
+        var cur = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++) prev[j] = j;
+        for (int i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i;
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                cur[j] = Math.Min(Math.Min(prev[j] + 1, cur[j - 1] + 1), prev[j - 1] + cost);
+            }
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length];
     }
 
     /// <summary>Overload for tests that only have text (positions default to top-left-ish).</summary>
@@ -294,9 +415,11 @@ public sealed class TooltipReader
         @"^(slot|ac|hp|mana|end|wt|weight|size|class|race|dmg|base\s*dmg|delay|ratio|atk|skill|str|sta|agi|dex|wis|int|cha|intelligence|charisma|stamina|agility|strength|dexterity|wisdom|magic|fire|cold|disease|poison|sv|effect|focus|proc|click|worn|cast\s*time|cooldown|required|recommended)\b.*[:.]",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // UI chrome / non-name lines that show up in the Description window.
+    // UI chrome / boilerplate lines that are never the item name. These appear in EVERY tooltip
+    // (e.g. the "Hold RMB…" hint and the "N empty slots" augment line), so if they aren't filtered
+    // they beat a short item name in the scorer. Anchored at line start.
     private static readonly Regex UiNoise = new(
-        @"^(description|unmodified|ornamentation|focus exaltation|click exaltation|worn exaltation|proc exaltation|click effect|combat effect|empty|lore|no trade|placeable|attunable|prestige|tier|backpack|this item)\b",
+        @"^(description|unmodified|ornamentation|focus exaltation|click exaltation|worn exaltation|proc exaltation|click effect|combat effect|empty|\d+ empty slots?|hold rmb|inspect or upgrade|lore|no trade|placeable|attunable|prestige|tier|backpack|this item)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Class-abbreviation list, e.g. "WAR CLR PAL RNG SHD DRU MNK BRD ROG". These read as long,
@@ -330,6 +453,13 @@ public sealed class TooltipReader
         if (words.Length >= 2)
             return !words.All(w => SlotWords.Contains(w));
         return s.Length >= 5 && !SlotWords.Contains(s);
+    }
+
+    /// <summary>A single slot/size keyword ("Primary", "Waist", "Small") — never an item name.</summary>
+    private static bool IsSlotOrSizeWord(string s)
+    {
+        var words = s.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length == 1 && SlotWords.Contains(words[0]);
     }
 
     private static bool LooksLikeName(string s)
