@@ -116,7 +116,13 @@ public partial class App : WpfApp
     {
         _hotkey?.Dispose();
         _hotkey = new HoldHotkey(_settings.Hotkey, Dispatcher);
-        _hotkey.Held += () => _coordinator!.OnHotkey();
+        // The hook is global; only run the lookup when EQ owns the foreground window, so the combo
+        // (e.g. a capital "A") doesn't trigger a lookup while typing in another app.
+        _hotkey.Held += () =>
+        {
+            if (ForegroundWindow.IsProcess(_settings.GameProcessName))
+                _coordinator!.OnHotkey();
+        };
         _hotkey.Released += () => _coordinator!.Hide();
         _hotkey.Start();
     }

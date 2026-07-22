@@ -38,6 +38,13 @@ public sealed class Settings
     /// <summary>Short source key used in the cache and UI, e.g. "eqlwiki".</summary>
     public string WikiSource { get; set; } = "eqlwiki";
 
+    /// <summary>
+    /// The game's process name (without ".exe"). The hold-to-show hotkey only fires when this process
+    /// owns the foreground window, so pressing the combo in another app (or typing a capital letter)
+    /// won't trigger a lookup. Leave blank to fire regardless of the focused window.
+    /// </summary>
+    public string GameProcessName { get; set; } = "eqgame";
+
     [JsonIgnore]
     public string FilePath { get; private set; } = DefaultPath;
 
