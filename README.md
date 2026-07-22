@@ -55,6 +55,7 @@ the OCR capture box here if names get cut off or misread:
 | `TooltipWidth` / `TooltipHeight` / `TooltipOffsetX` / `TooltipOffsetY` | The tight capture box for the inventory tooltip (below-right of the cursor). |
 | `CaptureLeft` / `CaptureRight` / `CaptureUp` / `CaptureDown` | The wide capture box used for an item Description window (name in the title above the cursor). Widen a side if a name is missed. |
 | `WikiApiUrl` | MediaWiki API base. Default `https://eqlwiki.com/api.php`. |
+| `GameProcessName` | Process that must own the foreground window for the hotkey to fire (default `eqgame`). Prevents the combo from triggering a lookup while you're in another app. Blank = fire anywhere. |
 
 ## How it works
 
