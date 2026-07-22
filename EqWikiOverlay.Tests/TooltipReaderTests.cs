@@ -75,6 +75,120 @@ public class TooltipReaderTests
         Assert.Null(TooltipReader.PickItemName(Array.Empty<string>()));
     }
 
+    // ---- Real inventory-tooltip dumps that used to mis-pick boilerplate over a short name. ----
+
+    [Fact]
+    public void PickItemName_TightBox_ShortName_BeatsEmptySlotsBoilerplate()
+    {
+        // Real "Cord +2" dump: the name is the top line but is short; the scorer used to pick
+        // "2 empty slots" / the "Hold RMB…" hint. Top-line rescue + boilerplate filter fix it.
+        var lines = new List<EqWikiOverlay.Core.OcrLine>
+        {
+            new("Cord +2",       Top: 4,   Height: 16, Left: 4),
+            new("No Trade",       Top: 26,  Height: 16, Left: 4),
+            new("Class: ALL",     Top: 48,  Height: 16, Left: 4),
+            new("Waist",          Top: 92,  Height: 16, Left: 4),
+            new("SMALL",          Top: 136, Height: 16, Left: 4),
+            new("2 empty slots",  Top: 246, Height: 16, Left: 4),
+            new("Hold RMB or ALT+LMB to inspect or upgrade item.", Top: 290, Height: 16, Left: 4),
+        };
+        Assert.Equal("Cord", TooltipReader.PickItemName(lines, 0.02, 0.02, requireConfident: true));
+    }
+
+    [Fact]
+    public void PickItemName_TightBox_ShortName_BeatsHoldRmbHint()
+    {
+        // Real "Cloth Cap" dump where OCR under-read the title to just "Cap": it must still beat
+        // the "Hold RMB…" hint (previously the only "confident" line, so it won).
+        var lines = new List<EqWikiOverlay.Core.OcrLine>
+        {
+            new("Cap",         Top: 4,   Height: 16, Left: 4),
+            new("No Trade, Quest", Top: 26,  Height: 16, Left: 4),
+            new("Class: ALL",  Top: 48,  Height: 16, Left: 4),
+            new("Head",        Top: 70,  Height: 16, Left: 4),
+            new("Hold RMB or ALT+LMB to inspect or upgrade item.", Top: 158, Height: 16, Left: 4),
+        };
+        Assert.Equal("Cap", TooltipReader.PickItemName(lines, 0.02, 0.02, requireConfident: true));
+    }
+
+    [Fact]
+    public void DescriptionWindow_DetectedFromGarbledUpgradeWindow()
+    {
+        // Real "Cloth Shawl" upgrade-window dump: no "xaltation" visible and "Modified" garbled to
+        // "lodified", but "be upgraded" + "odified" now flag it as a Description window.
+        var raw = new[]
+        {
+            "Class: AI I", "Race: AI I", "Shoulders", "TierO 0/1", "je Place", "Item",
+            "This item be upgraded.", "SMALL AC:", "1", "0.2", "lodified", "Shawl",
+        };
+        Assert.True(TooltipReader.LooksLikeDescriptionWindow(raw));
+    }
+
+    [Fact]
+    public void DescriptionTitle_NameAboveTradeFlags_BeatsSurroundingUi()
+    {
+        // Real Cloth Wristband Description dump: the wide box also grabbed a zone banner
+        // ("New Sebilis Expedition"), but EQ prints the item name directly above the "No Trade" flag.
+        var raw = new[]
+        {
+            "Group", "Invite", "New Sebilis Expedition", "Cloth Wristband +1",
+            "Desaipbon", "Clot) Wristband +1", "No Trade", "Class: A1 1", "Wrist",
+            "Tieri 0/2", "Merge", "Place", "This item can be upgraded.", "SMALL AC:",
+        };
+        Assert.Equal("Clot) Wristband", TooltipReader.PickDescriptionTitle(Positioned(raw)));
+    }
+
+    [Fact]
+    public void DescriptionTitle_NearDuplicateGarbledTitle_BeatsSurroundingUi()
+    {
+        // With no trade-flags line captured, the fallback still recovers the title: the two copies
+        // (title bar + dropdown) are garbled differently ("Clot) Shawt" vs "Clot) Shawl") and win as
+        // a near-duplicate pair over the longer, unique game-UI lines.
+        var raw = new[]
+        {
+            "Group", "3aIanced Stance", "spell Blade", "Invite", "LFG Disband",
+            "Clot) Shawt", "Description", "Clot) Shawl", "This item can be upgraded.", "SMALL AC:",
+        };
+        Assert.Equal("Clot) Shawt", TooltipReader.PickDescriptionTitle(Positioned(raw)));
+    }
+
+    [Theory]
+    [InlineData(new[] { "into", "-titles" }, false)]                          // stray UI fragment, no item
+    [InlineData(new[] { "Silver Stud", "Class: ALL", "Weight" }, true)]        // real hover tooltip
+    [InlineData(new[] { "Bread Cakes", "No Trade", "Size:" }, true)]           // tradable food
+    [InlineData(new[] { "Clot) Cape +2", "Merge", "This item can be upgraded." }, true)] // description window
+    public void HasItemStructure_DistinguishesRealTooltips(string[] lines, bool expected)
+    {
+        Assert.Equal(expected, TooltipReader.HasItemStructure(lines));
+    }
+
+    [Fact]
+    public void DescriptionWindow_DetectedViaMergeButton_WhenDescriptionGarbled()
+    {
+        // Real dump where "Description" OCR'd as "Desaipbon": the upgrade window's "Merge" button
+        // plus "…be upgraded" still flag it (a plain inventory hover has neither).
+        var raw = new[]
+        {
+            "New Sebilis Expedition", "Clot) Wristband +1", "Desaipbon", "No Trade",
+            "Merge", "Place", "Item", "This item can be upgraded.", "Tieri 0/2",
+        };
+        Assert.True(TooltipReader.LooksLikeDescriptionWindow(raw));
+    }
+
+    [Fact]
+    public void InventoryTooltip_WithHoldRmbHint_IsNotDescriptionWindow()
+    {
+        // Guard: a plain inventory tooltip (only "…inspect or upgrade" as its upgrade-ish line)
+        // must NOT be treated as a Description window, or pass 1 would be skipped wrongly.
+        var raw = new[]
+        {
+            "Cord +2", "No Trade", "Waist", "2 empty slots",
+            "This item be used in tadesKIIs.",
+            "Hold RMB or ALT+LMB to inspect or upgrade item.",
+        };
+        Assert.False(TooltipReader.LooksLikeDescriptionWindow(raw));
+    }
+
     // Real OCR of a Sword of the Lost Description window (from the debug dumps).
     private static readonly string[] SwordDescOcr =
     {

@@ -96,6 +96,11 @@ public sealed class EqlWikiProvider : IWikiProvider
             var s = q.Replace('q', 'g').Replace('0', 'o');
             yield return s;
 
+            // EQ's green title font reads 'h' as ')' ("Cloth" -> "Clot)"); recover it (and drop a
+            // stray '(' from the same confusion).
+            if (q.IndexOf(')') >= 0 || q.IndexOf('(') >= 0)
+                yield return s.Replace(")", "h").Replace("(", "");
+
             // The most common EQ OCR error: "rn" is read as "m" ("Morning" -> "Moming").
             // Expand each 'm' to 'rn' one at a time (covers a single-word slip) and all at once.
             yield return s.Replace("m", "rn");
